@@ -62,9 +62,9 @@ func main() {
 	}
 	serverMux := http.NewServeMux()
 	serverMux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
-	serverMux.HandleFunc("GET /healthz", healthCheck)
-	serverMux.HandleFunc("GET /metrics", apiCfg.getNumberOfHits)
-	serverMux.HandleFunc("POST /reset", apiCfg.resetMetrics)
+	serverMux.HandleFunc("GET /api/healthz", healthCheck)
+	serverMux.HandleFunc("GET /api/metrics", apiCfg.getNumberOfHits)
+	serverMux.HandleFunc("POST /api/reset", apiCfg.resetMetrics)
 	server := &http.Server{
 		Handler: serverMux,
 		Addr:    ":8080",
