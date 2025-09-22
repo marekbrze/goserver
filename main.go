@@ -18,6 +18,19 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
+func (cfg *apiConfig) resetMetrics(w http.ResponseWriter, r *http.Request) {
+	cfg.fileserverhits.Store(0)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	responseBody := []byte("Hits reseted")
+
+	_, err := w.Write(responseBody)
+	if err != nil {
+		// Log any error that occurs during writing the response.
+		log.Println("Failed to write response:", err)
+	}
+}
+
 func (cfg *apiConfig) getNumberOfHits(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -49,8 +62,9 @@ func main() {
 	}
 	serverMux := http.NewServeMux()
 	serverMux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
-	serverMux.HandleFunc("/healthz", healthCheck)
-	serverMux.HandleFunc("/metrics", apiCfg.getNumberOfHits)
+	serverMux.HandleFunc("GET /healthz", healthCheck)
+	serverMux.HandleFunc("GET /metrics", apiCfg.getNumberOfHits)
+	serverMux.HandleFunc("POST /reset", apiCfg.resetMetrics)
 	server := &http.Server{
 		Handler: serverMux,
 		Addr:    ":8080",
