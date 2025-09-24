@@ -6,6 +6,10 @@ import (
 	"net/http"
 )
 
+type chirp struct {
+	Body string `json:"body"`
+}
+
 func healthCheck(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	writer.WriteHeader(http.StatusOK)
@@ -19,14 +23,6 @@ func healthCheck(writer http.ResponseWriter, request *http.Request) {
 }
 
 func validateChirp(w http.ResponseWriter, r *http.Request) {
-	type chirp struct {
-		Body string `json:"body"`
-	}
-
-	type validResponse struct {
-		Valid bool `json:"valid"`
-	}
-
 	decoder := json.NewDecoder(r.Body)
 	receivedChirp := chirp{}
 	err := decoder.Decode(&receivedChirp)
@@ -38,6 +34,6 @@ func validateChirp(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 400, "Chirp is too long")
 		return
 	}
-
-	respondWithJSON(w, 200, validResponse{Valid: true})
+	cleaned := eraseProfane(receivedChirp)
+	respondWithJSON(w, 200, cleaned)
 }
