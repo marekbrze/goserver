@@ -5,10 +5,13 @@ import (
 	"log"
 	"net/http"
 	"sync/atomic"
+
+	"github.com/marekbrze/chirpy/internal/database"
 )
 
 type apiConfig struct {
 	fileserverhits atomic.Int32
+	dbQueries      *database.Queries
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
