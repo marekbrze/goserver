@@ -1,13 +1,27 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/marekbrze/chirpy/internal/database"
 )
 
+type receivedChirp struct {
+	Body   string    `json:"body"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
 type chirp struct {
-	Body string `json:"body"`
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
 }
 
 func healthCheck(writer http.ResponseWriter, request *http.Request) {
@@ -22,9 +36,9 @@ func healthCheck(writer http.ResponseWriter, request *http.Request) {
 	}
 }
 
-func validateChirp(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) addChirp(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	receivedChirp := chirp{}
+	receivedChirp := receivedChirp{}
 	err := decoder.Decode(&receivedChirp)
 	if err != nil {
 		respondWithError(w, 500, "Something went wrong")
@@ -34,6 +48,71 @@ func validateChirp(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 400, "Chirp is too long")
 		return
 	}
-	cleaned := eraseProfane(receivedChirp)
-	respondWithJSON(w, 200, cleaned)
+	cleanedChirp := eraseProfane(receivedChirp.Body)
+	chirpParams := database.CreateChirpParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+		Body:      cleanedChirp,
+		UserID:    receivedChirp.UserID,
+	}
+	savedChirp, err := cfg.dbQueries.CreateChirp(r.Context(), chirpParams)
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+	responseChirp := chirp{
+		ID:        savedChirp.ID,
+		CreatedAt: savedChirp.CreatedAt,
+		UpdatedAt: savedChirp.UpdatedAt,
+		Body:      savedChirp.Body,
+		UserID:    savedChirp.UserID,
+	}
+	respondWithJSON(w, 201, responseChirp)
+}
+
+func (cfg *apiConfig) getAllChirps(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.dbQueries.GetAllChirps(r.Context())
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+	var responseChirps []chirp
+	for _, dbChirp := range chirps {
+		responseChirp := chirp{
+			ID:        dbChirp.ID,
+			CreatedAt: dbChirp.CreatedAt,
+			UpdatedAt: dbChirp.UpdatedAt,
+			Body:      dbChirp.Body,
+			UserID:    dbChirp.UserID,
+		}
+
+		responseChirps = append(responseChirps, responseChirp)
+	}
+	respondWithJSON(w, 200, responseChirps)
+}
+
+func (cfg *apiConfig) getChirpByID(w http.ResponseWriter, r *http.Request) {
+	chirpID, err := uuid.Parse(r.PathValue("chirpID"))
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+	dbChirp, err := cfg.dbQueries.GetChirp(r.Context(), chirpID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			respondWithError(w, 404, "Chirp doesn't exist")
+			return
+		}
+		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+	responseChirp := chirp{
+		ID:        dbChirp.ID,
+		CreatedAt: dbChirp.CreatedAt,
+		UpdatedAt: dbChirp.UpdatedAt,
+		Body:      dbChirp.Body,
+		UserID:    dbChirp.UserID,
+	}
+	respondWithJSON(w, 200, responseChirp)
 }

@@ -19,7 +19,6 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 	dbURL := os.Getenv("CHIRPY_URL")
-	fmt.Println(dbURL)
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal("Couldn't connect to database")
@@ -28,6 +27,7 @@ func main() {
 	apiCfg := apiConfig{
 		fileserverhits: atomic.Int32{},
 		dbQueries:      dbQueries,
+		platform:       os.Getenv("PLATFORM"),
 	}
 	serverMux := http.NewServeMux()
 	serverMux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
@@ -35,10 +35,16 @@ func main() {
 	serverMux.HandleFunc("GET /admin/metrics", apiCfg.getNumberOfHits)
 	serverMux.HandleFunc("POST /admin/reset", apiCfg.reset)
 	serverMux.HandleFunc("POST /api/users", apiCfg.addUser)
-	serverMux.HandleFunc("POST /api/validate_chirp", validateChirp)
+	serverMux.HandleFunc("POST /api/login", apiCfg.loginUser)
+	serverMux.HandleFunc("POST /api/chirps", apiCfg.addChirp)
+	serverMux.HandleFunc("GET /api/chirps", apiCfg.getAllChirps)
+	serverMux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirpByID)
 	server := &http.Server{
 		Handler: serverMux,
 		Addr:    ":8080",
 	}
-	server.ListenAndServe()
+	fmt.Println("Server ready")
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("There was a problem %v", err)
+	}
 }

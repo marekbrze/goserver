@@ -9,16 +9,19 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/marekbrze/chirpy/internal/auth"
 	"github.com/marekbrze/chirpy/internal/database"
 )
 
 type apiConfig struct {
 	fileserverhits atomic.Int32
 	dbQueries      *database.Queries
+	platform       string
 }
 
-type email struct {
-	Email string `json:"email"`
+type userData struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type User struct {
@@ -68,17 +71,23 @@ func (cfg *apiConfig) getNumberOfHits(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) addUser(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	receivedEmail := email{}
-	err := decoder.Decode(&receivedEmail)
+	receivedUserData := userData{}
+	err := decoder.Decode(&receivedUserData)
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+	hashedPassword, err := auth.HashPassword(receivedUserData.Password)
 	if err != nil {
 		respondWithError(w, 500, "Something went wrong")
 		return
 	}
 	userParams := database.CreateUserParams{
-		ID:        uuid.New(),
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-		Email:     receivedEmail.Email,
+		ID:             uuid.New(),
+		CreatedAt:      time.Now().UTC(),
+		UpdatedAt:      time.Now().UTC(),
+		Email:          receivedUserData.Email,
+		HashedPassword: hashedPassword,
 	}
 	user, err := cfg.dbQueries.CreateUser(r.Context(), userParams)
 	if err != nil {
@@ -93,7 +102,37 @@ func (cfg *apiConfig) addUser(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, 201, responseUser)
 }
 
+func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	receivedUserData := userData{}
+	err := decoder.Decode(&receivedUserData)
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+	user, err := cfg.dbQueries.GetUser(r.Context(), receivedUserData.Email)
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+	loginCorrect, err := auth.CheckPasswordHash(receivedUserData.Password, user.HashedPassword)
+	if err != nil || !loginCorrect {
+		respondWithError(w, 401, "Incorrect email or password")
+		return
+	}
+	responseUser := User{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	}
+	respondWithJSON(w, 200, responseUser)
+}
+
 func (cfg *apiConfig) reset(w http.ResponseWriter, r *http.Request) {
+	if cfg.platform != "dev" {
+		respondWithJSON(w, 403, nil)
+	}
 	err := cfg.dbQueries.DeleteUsers(r.Context())
 	if err != nil {
 		log.Println("Failed to write response:", err)
