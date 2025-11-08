@@ -17,11 +17,13 @@ type apiConfig struct {
 	fileserverhits atomic.Int32
 	dbQueries      *database.Queries
 	platform       string
+	jwtSecret      string
 }
 
 type userData struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email            string `json:"email"`
+	Password         string `json:"password"`
+	ExpiresInSeconds int    `json:"expires_in_seconds"`
 }
 
 type User struct {
@@ -29,6 +31,11 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+}
+
+type TokenResponse struct {
+	User
+	Token string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -120,13 +127,24 @@ func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 401, "Incorrect email or password")
 		return
 	}
-	responseUser := User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
+	expiresIn := 3600
+	if receivedUserData.ExpiresInSeconds <= 3600 {
+		expiresIn = receivedUserData.ExpiresInSeconds
 	}
-	respondWithJSON(w, 200, responseUser)
+	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, time.Duration(expiresIn))
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+	}
+	responseWithToken := TokenResponse{
+		User: User{
+			ID:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			Email:     user.Email,
+		},
+		Token: token,
+	}
+	respondWithJSON(w, 200, responseWithToken)
 }
 
 func (cfg *apiConfig) reset(w http.ResponseWriter, r *http.Request) {
