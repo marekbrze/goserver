@@ -3,11 +3,13 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/marekbrze/chirpy/internal/auth"
 	"github.com/marekbrze/chirpy/internal/database"
 )
 
@@ -37,11 +39,27 @@ func healthCheck(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (cfg *apiConfig) addChirp(w http.ResponseWriter, r *http.Request) {
+	headerToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	userID, err := auth.ValidateJWT(headerToken, cfg.jwtSecret)
+	if err != nil {
+		fmt.Println(err)
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
 	decoder := json.NewDecoder(r.Body)
 	receivedChirp := receivedChirp{}
-	err := decoder.Decode(&receivedChirp)
+	err = decoder.Decode(&receivedChirp)
 	if err != nil {
 		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+	if receivedChirp.UserID != userID {
+		fmt.Println("Problem z walidacją usera")
+		respondWithError(w, 401, "Unauthorized")
 		return
 	}
 	if len(receivedChirp.Body) > 140 {

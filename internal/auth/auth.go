@@ -44,7 +44,7 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 	return jwtString, nil
 }
 
-func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
+func ValidateJWT(tokenString string, tokenSecret string) (uuid.UUID, error) {
 	parsedClaims := &jwt.RegisteredClaims{}
 	keyFunc := func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -53,28 +53,23 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 		fmt.Println("keyFunc call")
 		return []byte(tokenSecret), nil // Use the loaded secret
 	}
-
+	fmt.Println(tokenString)
 	token, err := jwt.ParseWithClaims(tokenString, parsedClaims, keyFunc)
 	if err != nil {
-		// More descriptive error handling might be beneficial here depending on JWT errors
 		return uuid.Nil, fmt.Errorf("error parsing token: %w", err) // Use %w for wrapping errors
 	}
 
-	// It's crucial to check token.Valid after parsing
 	if !token.Valid {
-		// This covers expiration, not-before, and signature validation failures
 		return uuid.Nil, errors.New("invalid JWT token")
 	}
 
 	subject, err := token.Claims.GetSubject()
 	if err != nil {
-		// This error typically means the 'sub' claim is missing or not a string
 		return uuid.Nil, fmt.Errorf("error extracting token subject (user ID): %w", err)
 	}
 
 	userID, err := uuid.Parse(subject)
 	if err != nil {
-		// This means the 'sub' claim was present but not a valid UUID format
 		return uuid.Nil, fmt.Errorf("invalid UUID format in token subject: %w", err)
 	}
 
