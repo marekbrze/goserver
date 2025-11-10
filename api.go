@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -14,8 +13,7 @@ import (
 )
 
 type receivedChirp struct {
-	Body   string    `json:"body"`
-	UserID uuid.UUID `json:"user_id"`
+	Body string `json:"body"`
 }
 
 type chirp struct {
@@ -46,7 +44,6 @@ func (cfg *apiConfig) addChirp(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, err := auth.ValidateJWT(headerToken, cfg.jwtSecret)
 	if err != nil {
-		fmt.Println(err)
 		respondWithError(w, 401, "Unauthorized")
 		return
 	}
@@ -55,11 +52,6 @@ func (cfg *apiConfig) addChirp(w http.ResponseWriter, r *http.Request) {
 	err = decoder.Decode(&receivedChirp)
 	if err != nil {
 		respondWithError(w, 500, "Something went wrong")
-		return
-	}
-	if receivedChirp.UserID != userID {
-		fmt.Println("Problem z walidacją usera")
-		respondWithError(w, 401, "Unauthorized")
 		return
 	}
 	if len(receivedChirp.Body) > 140 {
@@ -72,7 +64,7 @@ func (cfg *apiConfig) addChirp(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 		Body:      cleanedChirp,
-		UserID:    receivedChirp.UserID,
+		UserID:    userID,
 	}
 	savedChirp, err := cfg.dbQueries.CreateChirp(r.Context(), chirpParams)
 	if err != nil {

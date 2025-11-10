@@ -2,6 +2,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -50,13 +52,11 @@ func ValidateJWT(tokenString string, tokenSecret string) (uuid.UUID, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		fmt.Println("keyFunc call")
-		return []byte(tokenSecret), nil // Use the loaded secret
+		return []byte(tokenSecret), nil
 	}
-	fmt.Println(tokenString)
 	token, err := jwt.ParseWithClaims(tokenString, parsedClaims, keyFunc)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("error parsing token: %w", err) // Use %w for wrapping errors
+		return uuid.Nil, fmt.Errorf("error parsing token: %w", err)
 	}
 
 	if !token.Valid {
@@ -84,4 +84,14 @@ func GetBearerToken(headers http.Header) (string, error) {
 	} else {
 		return "", fmt.Errorf("header is not bearer type")
 	}
+}
+
+func MakeRefreshToken() (string, error) {
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	if err != nil {
+		return "", err
+	}
+	encodedString := hex.EncodeToString(key)
+	return encodedString, nil
 }

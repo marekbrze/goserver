@@ -38,6 +38,8 @@ func main() {
 	serverMux.HandleFunc("POST /api/users", apiCfg.addUser)
 	serverMux.HandleFunc("POST /api/login", apiCfg.loginUser)
 	serverMux.HandleFunc("POST /api/chirps", apiCfg.addChirp)
+	serverMux.HandleFunc("POST /api/refresh", apiCfg.refreshToken)
+	serverMux.HandleFunc("POST /api/revoke", apiCfg.revokeToken)
 	serverMux.HandleFunc("GET /api/chirps", apiCfg.getAllChirps)
 	serverMux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirpByID)
 	server := &http.Server{

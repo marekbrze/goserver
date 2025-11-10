@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -20,10 +21,9 @@ type apiConfig struct {
 	jwtSecret      string
 }
 
-type userData struct {
-	Email            string `json:"email"`
-	Password         string `json:"password"`
-	ExpiresInSeconds int    `json:"expires_in_seconds"`
+type UserData struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type User struct {
@@ -35,7 +35,12 @@ type User struct {
 
 type TokenResponse struct {
 	User
-	Token string
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type SimpleTokenResponse struct {
+	Token string `json:"token"`
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -78,7 +83,7 @@ func (cfg *apiConfig) getNumberOfHits(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) addUser(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	receivedUserData := userData{}
+	receivedUserData := UserData{}
 	err := decoder.Decode(&receivedUserData)
 	if err != nil {
 		respondWithError(w, 500, "Something went wrong")
@@ -111,7 +116,7 @@ func (cfg *apiConfig) addUser(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	receivedUserData := userData{}
+	receivedUserData := UserData{}
 	err := decoder.Decode(&receivedUserData)
 	if err != nil {
 		respondWithError(w, 500, "Something went wrong")
@@ -127,11 +132,23 @@ func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 401, "Incorrect email or password")
 		return
 	}
-	expiresIn := 3600
-	if receivedUserData.ExpiresInSeconds <= 3600 {
-		expiresIn = receivedUserData.ExpiresInSeconds
-	}
+	expiresIn := time.Hour
 	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, time.Duration(expiresIn))
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+	}
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+	}
+	refreshTokenParams := database.CreateRefreshTokenParams{
+		Token:     refreshToken,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+		ExpiresAt: time.Now().AddDate(0, 0, 60).UTC(),
+		UserID:    user.ID,
+	}
+	savedToken, err := cfg.dbQueries.CreateRefreshToken(r.Context(), refreshTokenParams)
 	if err != nil {
 		respondWithError(w, 500, "Something went wrong")
 	}
@@ -142,7 +159,8 @@ func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt: user.UpdatedAt,
 			Email:     user.Email,
 		},
-		Token: token,
+		Token:        token,
+		RefreshToken: savedToken.Token,
 	}
 	respondWithJSON(w, 200, responseWithToken)
 }
@@ -156,4 +174,61 @@ func (cfg *apiConfig) reset(w http.ResponseWriter, r *http.Request) {
 		log.Println("Failed to write response:", err)
 	}
 	respondWithJSON(w, 200, nil)
+}
+
+func (cfg *apiConfig) refreshToken(w http.ResponseWriter, r *http.Request) {
+	headerToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	tokenInfo, err := cfg.dbQueries.GetTokenInfo(r.Context(), headerToken)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	if tokenInfo.ExpiresAt.Before(time.Now()) || tokenInfo.RevokedAt.Valid {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	newToken, err := auth.MakeJWT(tokenInfo.UserID, cfg.jwtSecret, time.Hour)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	responseWithToken := SimpleTokenResponse{
+		Token: newToken,
+	}
+	respondWithJSON(w, 200, responseWithToken)
+}
+
+func (cfg *apiConfig) revokeToken(w http.ResponseWriter, r *http.Request) {
+	headerToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	tokenInfo, err := cfg.dbQueries.GetTokenInfo(r.Context(), headerToken)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	if tokenInfo.ExpiresAt.Before(time.Now()) || tokenInfo.RevokedAt.Valid {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	revokeTokenParams := database.RevokeTokenParams{
+		UpdatedAt: time.Now().UTC(),
+		RevokedAt: sql.NullTime{
+			Time:  time.Now().UTC(),
+			Valid: true,
+		},
+		Token: tokenInfo.Token,
+	}
+	err = cfg.dbQueries.RevokeToken(r.Context(), revokeTokenParams)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	respondWithError(w, 204, "Token revoked")
 }
