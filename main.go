@@ -36,6 +36,7 @@ func main() {
 	serverMux.HandleFunc("GET /admin/metrics", apiCfg.getNumberOfHits)
 	serverMux.HandleFunc("POST /admin/reset", apiCfg.reset)
 	serverMux.HandleFunc("POST /api/users", apiCfg.addUser)
+	serverMux.HandleFunc("PUT /api/users", apiCfg.updateUser)
 	serverMux.HandleFunc("POST /api/login", apiCfg.loginUser)
 	serverMux.HandleFunc("POST /api/chirps", apiCfg.addChirp)
 	serverMux.HandleFunc("POST /api/refresh", apiCfg.refreshToken)
