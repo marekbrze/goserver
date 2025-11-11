@@ -86,6 +86,16 @@ func GetBearerToken(headers http.Header) (string, error) {
 	}
 }
 
+func GetAPIKey(headers http.Header) (string, error) {
+	tokenFromHeader := headers.Get("Authorization")
+	if strings.HasPrefix(tokenFromHeader, "ApiKey ") {
+		modifiedString := tokenFromHeader[len("ApiKey "):]
+		return modifiedString, nil
+	} else {
+		return "", fmt.Errorf("header is not api key type")
+	}
+}
+
 func MakeRefreshToken() (string, error) {
 	key := make([]byte, 32)
 	_, err := rand.Read(key)

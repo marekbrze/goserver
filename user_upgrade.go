@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/marekbrze/chirpy/internal/auth"
 	"github.com/marekbrze/chirpy/internal/database"
 )
 
@@ -18,9 +19,18 @@ type upgradeParams struct {
 }
 
 func (cfg *apiConfig) upgradeUser(w http.ResponseWriter, r *http.Request) {
+	headerToken, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	if headerToken != cfg.apiKey {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
 	decoder := json.NewDecoder(r.Body)
 	receivedParams := upgradeParams{}
-	err := decoder.Decode(&receivedParams)
+	err = decoder.Decode(&receivedParams)
 	if err != nil {
 		respondWithError(w, 500, "Something went wrong")
 		return
