@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -82,7 +83,20 @@ func (cfg *apiConfig) addChirp(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) getAllChirps(w http.ResponseWriter, r *http.Request) {
-	chirps, err := cfg.dbQueries.GetAllChirps(r.Context())
+	authorInfo := uuid.NullUUID{}
+	s := r.URL.Query().Get("author_id")
+	if s != "" {
+		parserdUUID, err := uuid.Parse(s)
+		authorInfo = uuid.NullUUID{
+			UUID:  parserdUUID,
+			Valid: true,
+		}
+		if err != nil {
+			respondWithError(w, 500, "Something went wrong")
+			return
+		}
+	}
+	chirps, err := cfg.dbQueries.GetAllChirps(r.Context(), authorInfo)
 	if err != nil {
 		respondWithError(w, 500, "Something went wrong")
 		return
@@ -98,6 +112,13 @@ func (cfg *apiConfig) getAllChirps(w http.ResponseWriter, r *http.Request) {
 		}
 
 		responseChirps = append(responseChirps, responseChirp)
+	}
+
+	s = r.URL.Query().Get("sort")
+	if s == "desc" {
+		sort.Slice(responseChirps, func(i, j int) bool {
+			return responseChirps[i].CreatedAt.After(responseChirps[j].CreatedAt)
+		})
 	}
 	respondWithJSON(w, 200, responseChirps)
 }
