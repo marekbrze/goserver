@@ -27,10 +27,11 @@ type UserData struct {
 }
 
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 type TokenResponse struct {
@@ -106,10 +107,11 @@ func (cfg *apiConfig) addUser(w http.ResponseWriter, r *http.Request) {
 		log.Println("Failed to write response:", err)
 	}
 	responseUser := User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
+		ID:          user.ID,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+		Email:       user.Email,
+		IsChirpyRed: user.IsChirpyRed,
 	}
 	respondWithJSON(w, 201, responseUser)
 }
@@ -154,10 +156,11 @@ func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 	}
 	responseWithToken := TokenResponse{
 		User: User{
-			ID:        user.ID,
-			CreatedAt: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-			Email:     user.Email,
+			ID:          user.ID,
+			CreatedAt:   user.CreatedAt,
+			UpdatedAt:   user.UpdatedAt,
+			Email:       user.Email,
+			IsChirpyRed: user.IsChirpyRed,
 		},
 		Token:        token,
 		RefreshToken: savedToken.Token,
